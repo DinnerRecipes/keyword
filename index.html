@@ -44,6 +44,20 @@
                     <textarea id="seeds" rows="4" class="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-orange-500 outline-none" placeholder="Contoh: cara memancing"></textarea>
                 </div>
 
+                <!-- Word Count Filter (Baru) -->
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <label class="block text-sm font-semibold mb-2 text-indigo-600 flex items-center">
+                        <i class="fa-solid fa-file-word mr-2"></i> Minimum Word Count
+                    </label>
+                    <select id="minWordCount" class="w-full border border-slate-300 rounded-lg p-2 text-sm outline-none focus:ring-2 focus:ring-indigo-500 bg-white cursor-pointer">
+                        <option value="0">Tampilkan Semua</option>
+                        <option value="3">Min. 3 Kata</option>
+                        <option value="4">Min. 4 Kata</option>
+                        <option value="5">Min. 5 Kata</option>
+                        <option value="6">Min. 6 Kata</option>
+                    </select>
+                </div>
+
                 <!-- Filters -->
                 <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
                     <label class="block text-sm font-semibold mb-2 text-blue-600">Filter Positif (Harus Ada)</label>
@@ -55,7 +69,7 @@
                     <textarea id="negative" rows="2" class="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-red-500 outline-none" placeholder="Kata yang ingin dihapus..."></textarea>
                 </div>
 
-                <!-- Replace Text Tool (Dipindahkan ke bawah Filter Negatif) -->
+                <!-- Replace Text Tool -->
                 <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
                     <label class="block text-sm font-semibold mb-3 flex items-center text-indigo-600">
                         <i class="fa-solid fa-arrows-rotate mr-2"></i> Replace Text
@@ -171,6 +185,7 @@
             document.getElementById("stopBtn").disabled = false;
             updateStatus("Bing sedang bekerja...");
 
+            const minWords = parseInt(document.getElementById("minWordCount").value);
             const posFilter = document.getElementById("positive").value.split("\n").map(s => s.trim().toLowerCase()).filter(s => s);
             const negFilter = document.getElementById("negative").value.split("\n").map(s => s.trim().toLowerCase()).filter(s => s);
             const output = document.getElementById("output");
@@ -195,10 +210,15 @@
                         const lowRes = res.toLowerCase().trim();
                         if (!seen.has(lowRes)) {
                             seen.add(lowRes);
+                            
+                            // Check word count
+                            const wordCount = lowRes.split(/\s+/).length;
+                            const passMinWords = wordCount >= minWords;
+                            
                             const passPos = posFilter.length === 0 || posFilter.some(f => lowRes.includes(f));
                             const passNeg = negFilter.length === 0 || !negFilter.some(f => lowRes.includes(f));
 
-                            if (passPos && passNeg) {
+                            if (passMinWords && passPos && passNeg) {
                                 output.value += (output.value ? "\n" : "") + res;
                                 count++;
                                 document.getElementById("countText").innerText = count;
