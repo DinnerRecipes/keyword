@@ -66,8 +66,10 @@
                         </button>
                     </div>
                     <div class="flex gap-2">
-                        <button onclick="clearAll()" class="bg-slate-200 hover:bg-slate-300 px-4 py-2 rounded-lg text-sm">Reset</button>
-                        <button onclick="exportData()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm">Download .txt</button>
+                        <button onclick="clearAll()" class="bg-slate-200 hover:bg-slate-300 px-4 py-2 rounded-lg text-sm transition-all">Reset</button>
+                        <button onclick="copyToClipboard()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center transition-all">
+                            <i class="fa-solid fa-copy mr-2"></i> Salin Hasil
+                        </button>
                     </div>
                 </div>
 
@@ -119,7 +121,6 @@
                     delete window[callbackName];
                     if (script.parentNode) document.body.removeChild(script);
                     
-                    // Struktur Bing: [ "query", ["hasil1", "hasil2", ...]]
                     if (data && Array.isArray(data) && data.length > 1) {
                         resolve(data[1]);
                     } else {
@@ -127,7 +128,6 @@
                     }
                 };
 
-                // Endpoint Bing yang mendukung JSONP
                 script.src = `https://api.bing.com/osjson.aspx?query=${encodeURIComponent(query)}&JsonType=callback&JsonCallback=${callbackName}`;
                 
                 script.onerror = () => {
@@ -138,7 +138,6 @@
 
                 document.body.appendChild(script);
                 
-                // Timeout 3 detik
                 setTimeout(() => {
                     if (window[callbackName]) {
                         delete window[callbackName];
@@ -167,13 +166,11 @@
             const negFilter = document.getElementById("negative").value.split("\n").map(s => s.trim().toLowerCase()).filter(s => s);
             const output = document.getElementById("output");
 
-            // Bangun antrian awal jika kosong
             if (queue.length === 0) {
                 const alpha = " abcdefghijklmnopqrstuvwxyz0123456789".split("");
                 seeds.forEach(s => {
                     queue.push(s); 
                     alpha.forEach(l => {
-                        // Pola: "keyword a", "keyword b", dst.
                         queue.push(`${s} ${l}`.trim());
                     });
                 });
@@ -201,7 +198,6 @@
                                 document.getElementById("countText").innerText = count;
                                 output.scrollTop = output.scrollHeight;
 
-                                // Rekursif: gali keyword yang baru ditemukan
                                 if (lowRes.split(" ").length < 5) {
                                     queue.push(res);
                                 }
@@ -212,7 +208,6 @@
                     console.error("Fetch error", e);
                 }
 
-                // Jeda singkat agar tidak dianggap spam
                 await new Promise(r => setTimeout(r, 300));
             }
 
@@ -237,16 +232,36 @@
             showToast("Data dibersihkan");
         }
 
-        function exportData() {
-            const val = document.getElementById("output").value;
-            if (!val) return showToast("Tidak ada data!", true);
-            const blob = new Blob([val], {type: "text/plain"});
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `bing-keywords-${Date.now()}.txt`;
-            a.click();
-            showToast("Berhasil disimpan");
+        /**
+         * Fungsi untuk menyalin isi textarea ke clipboard
+         */
+        function copyToClipboard() {
+            const outputEl = document.getElementById('output');
+            const text = outputEl.value;
+
+            if (!text) {
+                showToast("Tidak ada hasil untuk disalin!", true);
+                return;
+            }
+
+            // Memilih teks di dalam textarea
+            outputEl.select();
+            outputEl.setSelectionRange(0, 99999); // Untuk perangkat seluler
+
+            try {
+                // Menggunakan execCommand copy untuk kompatibilitas dalam iframe
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showToast("Berhasil disalin ke clipboard!");
+                } else {
+                    showToast("Gagal menyalin.", true);
+                }
+            } catch (err) {
+                showToast("Error saat menyalin.", true);
+            }
+
+            // Menghilangkan seleksi agar tampilan kembali bersih
+            window.getSelection().removeAllRanges();
         }
     </script>
 </body>
