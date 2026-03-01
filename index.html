@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Keyword Generator Pro - Bing Suggest</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        textarea::-webkit-scrollbar { width: 8px; }
+        textarea::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 4px; }
+        textarea::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        textarea::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        #toast {
+            visibility: hidden; min-width: 250px; background-color: #333; color: #fff;
+            text-align: center; border-radius: 8px; padding: 12px 24px; position: fixed;
+            z-index: 50; left: 50%; bottom: 30px; transform: translateX(-50%);
+            opacity: 0; transition: opacity 0.3s, bottom 0.3s, visibility 0.3s;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        #toast.show { visibility: visible; opacity: 1; bottom: 50px; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen">
+
+    <nav class="bg-orange-600 text-white shadow-md">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <i class="fa-solid fa-bolt text-2xl"></i>
+                <h1 class="text-xl font-bold">Keyword Generator Pro (Bing Mode)</h1>
+            </div>
+            <div class="text-xs bg-orange-700 px-3 py-1 rounded-full uppercase tracking-wider">Bing API</div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <div class="lg:col-span-4 space-y-6">
+                <!-- Seeds -->
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <label class="block text-sm font-semibold mb-2">Keyword Utama (Seeds)</label>
+                    <textarea id="seeds" rows="4" class="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-orange-500 outline-none" placeholder="Contoh: cara memancing"></textarea>
+                </div>
+
+                <!-- Filters -->
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <label class="block text-sm font-semibold mb-2 text-blue-600">Filter Positif (Harus Ada)</label>
+                    <textarea id="positive" rows="2" class="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none" placeholder="Kata yang wajib muncul..."></textarea>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200">
+                    <label class="block text-sm font-semibold mb-2 text-red-600">Filter Negatif (Buang)</label>
+                    <textarea id="negative" rows="2" class="w-full border border-slate-300 rounded-lg p-3 text-sm focus:ring-2 focus:ring-red-500 outline-none" placeholder="Kata yang ingin dihapus..."></textarea>
+                </div>
+            </div>
+
+            <div class="lg:col-span-8 flex flex-col space-y-4">
+                <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap gap-3 items-center justify-between">
+                    <div class="flex gap-2">
+                        <button id="startBtn" onclick="startJob()" class="bg-orange-600 hover:bg-orange-700 text-white px-6 py-2 rounded-lg font-medium flex items-center transition-all">
+                            <i class="fa-solid fa-play mr-2"></i> Mulai
+                        </button>
+                        <button id="stopBtn" onclick="stopJob()" disabled class="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded-lg font-medium disabled:opacity-50 transition-all">
+                            <i class="fa-solid fa-stop mr-2"></i> Berhenti
+                        </button>
+                    </div>
+                    <div class="flex gap-2">
+                        <button onclick="clearAll()" class="bg-slate-200 hover:bg-slate-300 px-4 py-2 rounded-lg text-sm">Reset</button>
+                        <button onclick="exportData()" class="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm">Download .txt</button>
+                    </div>
+                </div>
+
+                <div class="flex justify-between px-2 text-sm font-medium">
+                    <span id="statusText" class="text-slate-500">Status: Siap</span>
+                    <span class="text-orange-600 font-bold">Total: <span id="countText">0</span></span>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col h-[500px] overflow-hidden">
+                    <div class="bg-slate-50 border-b p-3 text-xs text-slate-500 flex justify-between">
+                        <span>Output Bing Suggest</span>
+                        <span id="queueText">Sisa Antrian: 0</span>
+                    </div>
+                    <textarea id="output" readonly class="flex-grow p-4 font-mono text-sm resize-none outline-none bg-slate-50/30"></textarea>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <div id="toast"></div>
+
+    <script>
+        let isRunning = false;
+        let queue = [];
+        let seen = new Set();
+        let count = 0;
+
+        function showToast(msg, isErr = false) {
+            const t = document.getElementById("toast");
+            t.innerText = msg;
+            t.style.backgroundColor = isErr ? "#ef4444" : "#333";
+            t.className = "show";
+            setTimeout(() => t.className = "", 3000);
+        }
+
+        function updateStatus(txt) {
+            document.getElementById("statusText").innerText = `Status: ${txt}`;
+        }
+
+        /**
+         * Menggunakan Bing Autosuggest API (JSONP)
+         */
+        function fetchBingKeywords(query) {
+            return new Promise((resolve) => {
+                const callbackName = 'bing_cb_' + Math.random().toString(36).substr(2, 9);
+                const script = document.createElement('script');
+                
+                window[callbackName] = (data) => {
+                    delete window[callbackName];
+                    if (script.parentNode) document.body.removeChild(script);
+                    
+                    // Struktur Bing: [ "query", ["hasil1", "hasil2", ...]]
+                    if (data && Array.isArray(data) && data.length > 1) {
+                        resolve(data[1]);
+                    } else {
+                        resolve([]);
+                    }
+                };
+
+                // Endpoint Bing yang mendukung JSONP
+                script.src = `https://api.bing.com/osjson.aspx?query=${encodeURIComponent(query)}&JsonType=callback&JsonCallback=${callbackName}`;
+                
+                script.onerror = () => {
+                    delete window[callbackName];
+                    if (script.parentNode) document.body.removeChild(script);
+                    resolve([]);
+                };
+
+                document.body.appendChild(script);
+                
+                // Timeout 3 detik
+                setTimeout(() => {
+                    if (window[callbackName]) {
+                        delete window[callbackName];
+                        if (script.parentNode) document.body.removeChild(script);
+                        resolve([]);
+                    }
+                }, 3000);
+            });
+        }
+
+        async function startJob() {
+            const seedsRaw = document.getElementById("seeds").value;
+            const seeds = seedsRaw.split("\n").map(s => s.trim()).filter(s => s);
+
+            if (seeds.length === 0) {
+                showToast("Silakan masukkan keyword awal!", true);
+                return;
+            }
+
+            isRunning = true;
+            document.getElementById("startBtn").disabled = true;
+            document.getElementById("stopBtn").disabled = false;
+            updateStatus("Bing sedang bekerja...");
+
+            const posFilter = document.getElementById("positive").value.split("\n").map(s => s.trim().toLowerCase()).filter(s => s);
+            const negFilter = document.getElementById("negative").value.split("\n").map(s => s.trim().toLowerCase()).filter(s => s);
+            const output = document.getElementById("output");
+
+            // Bangun antrian awal jika kosong
+            if (queue.length === 0) {
+                const alpha = " abcdefghijklmnopqrstuvwxyz0123456789".split("");
+                seeds.forEach(s => {
+                    queue.push(s); 
+                    alpha.forEach(l => {
+                        // Pola: "keyword a", "keyword b", dst.
+                        queue.push(`${s} ${l}`.trim());
+                    });
+                });
+            }
+
+            while (isRunning && queue.length > 0) {
+                const currentQuery = queue.shift();
+                document.getElementById("queueText").innerText = `Sisa Antrian: ${queue.length}`;
+                
+                try {
+                    const results = await fetchBingKeywords(currentQuery);
+                    
+                    results.forEach(res => {
+                        const lowRes = res.toLowerCase().trim();
+                        
+                        if (!seen.has(lowRes)) {
+                            seen.add(lowRes);
+
+                            const passPos = posFilter.length === 0 || posFilter.some(f => lowRes.includes(f));
+                            const passNeg = negFilter.length === 0 || !negFilter.some(f => lowRes.includes(f));
+
+                            if (passPos && passNeg) {
+                                output.value += (output.value ? "\n" : "") + res;
+                                count++;
+                                document.getElementById("countText").innerText = count;
+                                output.scrollTop = output.scrollHeight;
+
+                                // Rekursif: gali keyword yang baru ditemukan
+                                if (lowRes.split(" ").length < 5) {
+                                    queue.push(res);
+                                }
+                            }
+                        }
+                    });
+                } catch (e) {
+                    console.error("Fetch error", e);
+                }
+
+                // Jeda singkat agar tidak dianggap spam
+                await new Promise(r => setTimeout(r, 300));
+            }
+
+            if (queue.length === 0) stopJob();
+        }
+
+        function stopJob() {
+            isRunning = false;
+            document.getElementById("startBtn").disabled = false;
+            document.getElementById("stopBtn").disabled = true;
+            updateStatus("Proses Berhenti");
+        }
+
+        function clearAll() {
+            stopJob();
+            queue = [];
+            seen = new Set();
+            count = 0;
+            document.getElementById("output").value = "";
+            document.getElementById("countText").innerText = "0";
+            document.getElementById("queueText").innerText = "Sisa Antrian: 0";
+            showToast("Data dibersihkan");
+        }
+
+        function exportData() {
+            const val = document.getElementById("output").value;
+            if (!val) return showToast("Tidak ada data!", true);
+            const blob = new Blob([val], {type: "text/plain"});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `bing-keywords-${Date.now()}.txt`;
+            a.click();
+            showToast("Berhasil disimpan");
+        }
+    </script>
+</body>
+</html>
